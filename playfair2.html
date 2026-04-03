@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Playfair Cipher</title>
+    <style>
+        body { font-family: Arial; padding: 20px; }
+        input, button { margin: 8px 0; padding: 6px; }
+        table { border-collapse: collapse; margin-top: 10px; }
+        td { border: 1px solid black; padding: 8px; text-align: center; }
+        .error { color: red; margin-left: 10px; }
+        .box { margin-top: 15px; padding: 10px; background: #f4f4f4; }
+    </style>
+</head>
+<body>
+
+<h2>Playfair Cipher</h2>
+
+Keyword:<br>
+<input type="text" id="key">
+<span id="keyError" class="error"></span><br>
+
+Plaintext:<br>
+<input type="text" id="text">
+<span id="textError" class="error"></span><br><br>
+
+<button onclick="run()">Run</button>
+
+<h3>Matrix:</h3>
+<div id="matrix"></div>
+
+<h3>Encrypted Text:</h3>
+<p id="encrypted"></p>
+
+<h3>Decrypted Text:</h3>
+<p id="decrypted"></p>
+
+<h3>Encryption Working:</h3>
+<div class="box" id="encWork"></div>
+
+<h3>Decryption Working:</h3>
+<div class="box" id="decWork"></div>
+
+<script>
+function isValidInput(str) {
+    return /^[A-Za-z]+$/.test(str);
+}
+
+function generateMatrix(key) {
+    key = key.toUpperCase().replace(/[^A-Z]/g, '').replace(/J/g, 'I');
+    let used = {}, matrix = [];
+    let alphabet = "ABCDEFGHIKLMNOPQRSTUVWXYZ";
+
+    key += alphabet;
+
+    for (let c of key) {
+        if (!used[c]) {
+            matrix.push(c);
+            used[c] = true;
+        }
+    }
+    return matrix;
+}
+
+function displayMatrix(matrix) {
+    let html = "<table>";
+    for (let i = 0; i < 5; i++) {
+        html += "<tr>";
+        for (let j = 0; j < 5; j++) {
+            html += "<td>" + matrix[i*5 + j] + "</td>";
+        }
+        html += "</tr>";
+    }
+    html += "</table>";
+    document.getElementById("matrix").innerHTML = html;
+}
+
+function preprocess(text) {
+    text = text.toUpperCase().replace(/[^A-Z]/g, '').replace(/J/g, 'I');
+    let res = "";
+
+    for (let i = 0; i < text.length; i++) {
+        res += text[i];
+        if (i < text.length-1 && text[i] === text[i+1]) {
+            res += 'X';
+        }
+    }
+
+    if (res.length % 2 !== 0) res += 'X';
+    return res;
+}
+
+function findPos(matrix, char) {
+    let idx = matrix.indexOf(char);
+    return [Math.floor(idx/5), idx%5];
+}
+
+function encryptWithSteps(matrix, text) {
+    let res = "", steps = "";
+
+    for (let i = 0; i < text.length; i += 2) {
+        let a = text[i], b = text[i+1];
+        let [r1,c1] = findPos(matrix, a);
+        let [r2,c2] = findPos(matrix, b);
+
+        let rule, out1, out2;
+
+        if (r1 === r2) {
+            rule = "Same Row";
+            out1 = matrix[r1*5 + (c1+1)%5];
+            out2 = matrix[r2*5 + (c2+1)%5];
+        }
+        else if (c1 === c2) {
+            rule = "Same Column";
+            out1 = matrix[((r1+1)%5)*5 + c1];
+            out2 = matrix[((r2+1)%5)*5 + c2];
+        }
+        else {
+            rule = "Rectangle";
+            out1 = matrix[r1*5 + c2];
+            out2 = matrix[r2*5 + c1];
+        }
+
+        res += out1 + out2;
+        steps += `${a}${b} → ${rule} → ${out1}${out2}<br>`;
+    }
+
+    return {res, steps};
+}
+
+function decryptWithSteps(matrix, text) {
+    let res = "", steps = "";
+
+    for (let i = 0; i < text.length; i += 2) {
+        let a = text[i], b = text[i+1];
+        let [r1,c1] = findPos(matrix, a);
+        let [r2,c2] = findPos(matrix, b);
+
+        let rule, out1, out2;
+
+        if (r1 === r2) {
+            rule = "Same Row";
+            out1 = matrix[r1*5 + (c1+4)%5];
+            out2 = matrix[r2*5 + (c2+4)%5];
+        }
+        else if (c1 === c2) {
+            rule = "Same Column";
+            out1 = matrix[((r1+4)%5)*5 + c1];
+            out2 = matrix[((r2+4)%5)*5 + c2];
+        }
+        else {
+            rule = "Rectangle";
+            out1 = matrix[r1*5 + c2];
+            out2 = matrix[r2*5 + c1];
+        }
+
+        res += out1 + out2;
+        steps += `${a}${b} → ${rule} → ${out1}${out2}<br>`;
+    }
+
+    return {res, steps};
+}
+
+function cleanDecrypted(text) {
+    let res = "";
+
+    for (let i = 0; i < text.length; i++) {
+        if (i>0 && i<text.length-1 &&
+            text[i]==='X' &&
+            text[i-1]===text[i+1]) continue;
+
+        res += text[i];
+    }
+
+    if (res.endsWith('X')) res = res.slice(0,-1);
+    return res;
+}
+
+function run() {
+    let key = document.getElementById("key").value;
+    let text = document.getElementById("text").value;
+
+    let keyError = document.getElementById("keyError");
+    let textError = document.getElementById("textError");
+
+    keyError.innerText = "";
+    textError.innerText = "";
+
+    if (!isValidInput(key)) {
+        keyError.innerText = "Only letters allowed";
+        return;
+    }
+    if (!isValidInput(text)) {
+        textError.innerText = "Only letters allowed";
+        return;
+    }
+
+    let matrix = generateMatrix(key);
+    displayMatrix(matrix);
+
+    let processed = preprocess(text);
+
+    let enc = encryptWithSteps(matrix, processed);
+    let dec = decryptWithSteps(matrix, enc.res);
+
+    let cleaned = cleanDecrypted(dec.res);
+
+    document.getElementById("encrypted").innerText = enc.res;
+    document.getElementById("decrypted").innerText = cleaned;
+
+    document.getElementById("encWork").innerHTML = enc.steps;
+    document.getElementById("decWork").innerHTML = dec.steps;
+}
+</script>
+
+</body>
+</html>
